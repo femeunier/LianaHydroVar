@@ -9,6 +9,7 @@ library(gridExtra)
 library(cowplot)
 library(gtable)
 library(e1071)
+library(stringr)
 
 # Constants
 constants <- list(rho = 1000, eta = 1.002e-9)
@@ -21,7 +22,11 @@ individuals <- sort(unique(data_kh$Liana.ID))
 file1 <- file.path(getwd(),'data/family_final.csv')
 samples <- as.data.frame(read.table(file1,sep=',',header = TRUE,stringsAsFactors = FALSE)) %>% arrange(ind) %>%
   select(c('ind','dbh','stem','family','family','genus','wd')) %>% mutate (famgen = ifelse(genus == "",family,paste(family,genus))) %>%
-  mutate(family = sub("\\ .*", "", family)) %>% filter(family != '') %>% rename(Family = family) %>% filter(ind %in% individuals)
+  mutate(family = sub("\\ .*", "", family)) %>% filter(family != '') %>% rename(Family = family) %>% filter(ind %in% individuals) %>% mutate(
+    species = case_when(
+      substr(famgen,nchar(famgen),nchar(famgen)) == ")" ~ substr(famgen,1,nchar(famgen)-4),
+      TRUE ~ famgen
+    ))
 
 stem <- samples %>% select(c('ind','stem'))
 
@@ -34,7 +39,7 @@ data_kh <- data_kh %>% rename(ind = Liana.ID) %>% merge(samples) %>% merge(VD)
 data_kh <- data_kh %>% group_by(famgen) %>% mutate(Dh = (1/max(Vessel.number)*sum(d**4))**(1/4))
 
 
-data_kh %>% filter(D..m. < 50/1000/1000) %>% add_count() %>% summarise(n_small = mean(n))
+# data_kh %>% filter(D..m. < 50/1000/1000) %>% add_count() %>% summarise(n_small = mean(n))
 
 #######################################################################
 
@@ -57,7 +62,7 @@ ind_kh <- data_kh %>% group_by(ind,famgen) %>% add_count() %>% summarize(
   Dh = (mean(Dh*1000*1000, na.rm = TRUE)),
   Area_tot = sum(Area..mm..),
   VD = (mean(VD,na.rm=TRUE))) %>% mutate (Kp = (pi*constants$rho/(128*constants$eta)*(VD*1000*1000)*(Dh/1000/1000)**4)) %>%
-  mutate(VA = Area_tot/N*VD) %>% merge(stem) %>% arrange(famgen) 
+  mutate(VA = Area_tot/N*VD) %>% merge(stem) %>% arrange(famgen)
 
 ind_kh2 <- data_kh %>% group_by(ind,famgen) %>% add_count() %>% summarize(
   dbh = mean(dbh,na.rm = TRUE),
@@ -71,7 +76,7 @@ ind_kh2 <- data_kh %>% group_by(ind,famgen) %>% add_count() %>% summarize(
   Dh = mean(Dh*1000*1000, na.rm = TRUE),
   Area_tot = sum(Area..mm..),
   VD = mean(VD,na.rm=TRUE)) %>% mutate (Kp = pi*constants$rho/(128*constants$eta)*(VD*1000*1000)*(Dh/1000/1000)**4) %>%
-  mutate(VA = Area_tot/N*VD) %>% merge(stem) 
+  mutate(VA = Area_tot/N*VD) %>% merge(stem)
 
 
 
@@ -132,9 +137,46 @@ Table2 <- family %>% mutate(
 
 write.table(Table2,file = file.path(getwd(),'Tables/Table2.csv'),sep = ',',row.names = FALSE)
 
+# Table Species
+species <- samples %>% merge(unique(ind_kh),by = 'ind') %>% group_by(species) %>% mutate(Vessel_N = N) %>% add_count() %>% summarize(
+  N = mean(n),
+  mean_dbh = mean(dbh.x, na.rm = TRUE),
+  std_dbh = sd(dbh.x, na.rm = TRUE),
+  mean_wd = mean(wd.y, na.rm = TRUE),
+  std_wd = sd(wd.y, na.rm = TRUE),
+  mean_d = mean(d_mean, na.rm = TRUE),
+  median_d = median(rep(d_median,N), na.rm = TRUE),
+  min_d = min(d_min, na.rm = TRUE),
+  max_d = max(d_max, na.rm = TRUE),
+  std_d = sd(d_mean, na.rm = TRUE),
+  mean_Dh = mean(Dh, na.rm = TRUE),
+  std_Dh = sd(Dh, na.rm = TRUE),
+  mean_Kp = mean(Kp, na.rm = TRUE),
+  std_Kp = sd(Kp, na.rm = TRUE),
+  mean_VD = mean(VD, na.rm = TRUE),
+  std_VD = sd(VD, na.rm = TRUE),
+  mean_VA = mean(VA*100, na.rm = TRUE),
+  std_VA = sd(VA*100, na.rm = TRUE),
+  mean_N = mean(Vessel_N,na.rm = TRUE),
+  sd_N = sd(Vessel_N, na.rm = TRUE))
+
+
+Table_species <- species %>% mutate(
+  DBH = ifelse(N>1,paste(round(mean_dbh,digits = 1),round(std_dbh,digits = 1),sep = ' ± '),round(mean_dbh,digits = 1)),
+  WD = ifelse(N>1,paste(round(mean_wd,digits = 2),round(std_wd,digits = 2),sep = ' ± '),round(mean_wd,digits = 2)),
+  Vessel_N = ifelse(N>1,paste(round(mean_N,digits = 0),round(sd_N,digits = 0),sep = ' ± ')   ,round(mean_N,digits = 0)),
+  Dmedian = paste(round(median_d,digits = 0),'[',round(min_d,digits = 0),'-',round(max_d,digits = 0),']',sep = ' '),
+  D = ifelse(N>1,paste(round(mean_d,digits = 0),round(std_d,digits = 0),sep = ' ± ')   ,round(mean_d,digits = 0)),
+  Dh = ifelse(N>1,paste(round(mean_Dh,digits = 0),round(std_Dh,digits = 0),sep = ' ± '),round(mean_Dh,digits = 0)),
+  VD = ifelse(N>1,paste(round(mean_VD,digits = 1),round(std_VD,digits = 1),sep = ' ± '),round(mean_VD,digits = 1)),
+  VA = ifelse(N>1,paste(round(mean_VA,digits = 1),round(std_VA,digits = 1),sep = ' ± '),round(mean_VA,digits = 1)),
+  Kp = ifelse(N>1,paste(round(mean_Kp,digits = 2),round(std_Kp,digits = 2),sep = ' ± '),round(mean_Kp,digits = 2))) %>%
+  select(c('species','N','DBH','WD','Vessel_N','Dmedian','D','Dh','VD','VA','Kp'))
+
+write.table(Table_species,file = file.path(getwd(),'Tables/Table_species.csv'),sep = ',',row.names = FALSE)
 
 # All together
-# To do 
+# To do
 
 all <- data.frame(median = c(median(ind_kh$dbh),median(ind_kh$wd),median(data_kh$d)*1000*1000,median(ind_kh$Dh),median(ind_kh$VD),median(ind_kh$VA*100),median(ind_kh$Kp)),
                   mean = c(mean(ind_kh$dbh),mean(ind_kh$wd),mean(data_kh$d)*1000*1000,mean(ind_kh$Dh),mean(ind_kh$VD),mean(ind_kh$VA*100),mean(ind_kh$Kp)),
@@ -157,13 +199,39 @@ write.table(Table3,file = file.path(getwd(),'Tables/Table3.csv'),sep = ',',row.n
 
 # Log10 transform
 
+species <- as.data.frame(
+  samples %>% merge(unique(ind_kh),by = 'ind') %>% group_by(species) %>% mutate(Vessel_N = N) %>% add_count() %>% summarize(
+    N = mean(n),
+    mean_dbh = mean(dbh.x, na.rm = TRUE),
+    mean_wd = mean(wd.y, na.rm = TRUE),
+    mean_d = mean(d_mean, na.rm = TRUE),
+    median_d = median(rep(d_median,N), na.rm = TRUE),
+    max_d = mean(d_max, na.rm = TRUE),
+    mean_Dh = mean(Dh, na.rm = TRUE),
+    mean_Kp = mean(Kp, na.rm = TRUE),
+    mean_VD = mean(VD, na.rm = TRUE),
+    mean_VA = mean(VA*100, na.rm = TRUE),
+    mean_N = mean(Vessel_N,na.rm = TRUE))  %>% select(species,mean_dbh,mean_wd,mean_d,max_d,mean_Dh,mean_VD,mean_Kp,mean_VA) %>% 
+    rename(dbh = mean_dbh,wd = mean_wd,d_mean = mean_d,VA = mean_VA,
+           Kp = mean_Kp, VD = mean_VD,Dh = mean_Dh) %>% ungroup() %>% 
+    mutate(d_mean = log10(d_mean),
+           VD = log10(VD),
+           Kp = log10(Kp),
+           Dh = log10(Dh)))
+
 ind_kh <- ind_kh  %>% mutate(d_mean = log10(d_mean),
                              VD = log10(VD),
                              Kp = log10(Kp),
                              Dh = log10(Dh))
 
+# Individuals 
 select_ind <- ind_kh %>% select(-one_of(c('famgen','stem'))) %>%
   select(c('dbh','d_mean','Dh','VD','Kp','VA','wd')) %>% rename(D = d_mean,DBH = dbh)
+
+# Species
+# select_ind <- species %>% select(-one_of(c('species'))) %>%
+#   select(c('dbh','d_mean','Dh','VD','Kp','VA','wd')) %>% rename(D = d_mean,DBH = dbh)
+
 
 colsc=c(rgb(241, 54, 23, maxColorValue=255), 'white', rgb(0, 61, 104, maxColorValue=255))
 colramp = colorRampPalette(colsc, space='Lab')
@@ -198,6 +266,8 @@ png(filename = file.path(getwd(),'Figures/corr_vars.png'),
 plot.new()
 par(mfrow=c(N,N),mar=c(2,4.5,1.5,0.5))
 
+corr_mat <- array(NA,dim = c(N,N))
+
 for (i in seq(1,N)){
   for (j in seq(1,N)){
     if (i == j){
@@ -223,8 +293,9 @@ for (i in seq(1,N)){
       mat[2, 1] <- mat[1, 2]
       ell <- ellipse(mat, t = 0.43)
       test <- cor.test(select_ind[,i],select_ind[,j], method = "pearson")
-      Signif <- symnum(test$p.value, corr = FALSE, na = FALSE, 
-                       cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1), symbols = c("***", 
+      corr_mat[i,j] <- test$p.value
+      Signif <- symnum(test$p.value, corr = FALSE, na = FALSE,
+                       cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1), symbols = c("***",
                                                                                 "**", "*", ".", " "))
       if (i==1){
         plot(NA,axes = FALSE,ylab = "",xlab = "",xlim = c(-1,1)*0.45,ylim = c(-1,1)*0.45)
@@ -245,6 +316,8 @@ for (i in seq(1,N)){
     }
   }
 }
+
+rownames(corr_mat) <- colnames(corr_mat) <- Names2 
 
 dev.off()
 
@@ -280,8 +353,8 @@ for (i in seq(1,N)){
       mat[2, 1] <- mat[1, 2]
       ell <- ellipse(mat, t = 0.43)
       test <- cor.test(select_ind[,i],select_ind[,j], method = "pearson")
-      Signif <- symnum(test$p.value, corr = FALSE, na = FALSE, 
-                       cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1), symbols = c("***", 
+      Signif <- symnum(test$p.value, corr = FALSE, na = FALSE,
+                       cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1), symbols = c("***",
                                                                                 "**", "*", ".", " "))
       if (i==1){
         plot(NA,axes = FALSE,ylab = "",xlab = "",xlim = c(-1,1)*0.45,ylim = c(-1,1)*0.45)
@@ -299,14 +372,14 @@ for (i in seq(1,N)){
            srt = corr[i,j]*30,cex = 1.5)
       if (i==N){
       mtext(side=1, line=0.2, Names2[j],font=2)}
-      
+
       lm1 <- lm(select_ind[,i]~select_ind[,j])
     } else {
       plot(1, type="n", yaxt='n', ann=FALSE,xaxt='n',axes=FALSE, ylab = "" ,xlab = "")
     }
     if (j==1){
       mtext(side=2, line=0.2, Names3[i],font=2)
-    } 
+    }
   }
 }
 

@@ -8,6 +8,7 @@ library(dplyr)
 library(gridExtra)
 library(cowplot)
 library(gtable)
+library(ggrepel)
 library(e1071)
 
 # Constants
@@ -21,7 +22,11 @@ individuals <- sort(unique(data_kh$Liana.ID))
 file1 <- file.path(getwd(),'data/family_final.csv')
 samples <- as.data.frame(read.table(file1,sep=',',header = TRUE,stringsAsFactors = FALSE)) %>% arrange(ind) %>%
   select(c('ind','dbh','stem','family','family','genus','wd')) %>% mutate (famgen = ifelse(genus == "",family,paste(family,genus))) %>%
-  mutate(family = sub("\\ .*", "", family)) %>% filter(family != '') %>% rename(Family = family) %>% filter(ind %in% individuals)
+  mutate(family = sub("\\ .*", "", family)) %>% filter(family != '') %>% rename(Family = family) %>% filter(ind %in% individuals)  %>% mutate(
+    species = case_when(
+      substr(famgen,nchar(famgen),nchar(famgen)) == ")" ~ substr(famgen,1,nchar(famgen)-4),
+      TRUE ~ famgen
+    ))
 
 stem <- samples %>% select(c('ind','stem'))
 
@@ -58,19 +63,52 @@ ind_kh <- data_kh %>% group_by(ind,famgen) %>% add_count() %>% summarize(
   Area_tot = sum(Area..mm..),
   VD = (mean(VD,na.rm=TRUE))) %>% mutate (Kp = (pi*constants$rho/(128*constants$eta)*(VD*1000*1000)*(Dh/1000/1000)**4)) %>%
   mutate(VA = Area_tot/N*VD) %>% merge(stem) %>% arrange(famgen)    %>% mutate(d_mean = log10(d_mean),
+                                                                               d_max = log10(d_max),
                                                                                VD = log10(VD),
                                                                                Kp = log10(Kp),
                                                                                Dh = log10(Dh))
 
 
-PCA <- ind_kh %>% select(dbh,wd,d_mean,Dh,VD,Kp,VA) %>% rename(DBH = dbh,WD = wd,D = d_mean)
+PCA <- ind_kh %>% select(dbh,wd,d_mean,d_max,Dh,VD,Kp,VA) %>% rename(DBH = dbh,WD = wd,D = d_mean,Dmax = d_max) %>% ungroup()
+PCA_species <- as.data.frame(
+  samples %>% merge(unique(ind_kh),by = 'ind') %>% group_by(species) %>% mutate(Vessel_N = N) %>% add_count() %>% summarize(
+    N = mean(n),
+    mean_dbh = mean(dbh.x, na.rm = TRUE),
+    mean_wd = mean(wd.y, na.rm = TRUE),
+    mean_d = mean(d_mean, na.rm = TRUE),
+    median_d = median(rep(d_median,N), na.rm = TRUE),
+    max_d = mean(d_max, na.rm = TRUE),
+    mean_Dh = mean(Dh, na.rm = TRUE),
+    mean_Kp = mean(Kp, na.rm = TRUE),
+    mean_VD = mean(VD, na.rm = TRUE),
+    mean_VA = mean(VA*100, na.rm = TRUE),
+    mean_N = mean(Vessel_N,na.rm = TRUE))  %>% select(species,mean_dbh,mean_wd,mean_d,max_d,mean_Dh,mean_VD,mean_Kp,mean_VA) %>% 
+  rename(DBH = mean_dbh,WD = mean_wd,D = mean_d,Dmax = max_d,VA = mean_VA,
+         Kp = mean_Kp, VD = mean_VD,Dh = mean_Dh) %>% ungroup() %>% 
+  mutate(d_mean = log10(D),
+          d_max = log10(Dmax),
+           VD = log10(VD),
+           Kp = log10(Kp),
+           Dh = log10(Dh))) %>% select(-c(d_mean,d_max))
+
+rownames(PCA) <- ind_kh$famgen
+rownames(PCA_species) <- PCA_species$species
+PCA_species <- PCA_species %>% select(-species)
 
 ##########################################################
+file.poorter <- "/home/femeunier/Documents/R/Robin/data/data_Poorter_small.csv"
+data.poorter <- read.csv(file.poorter)
+
 # PCA
 library("FactoMineR")
 library("factoextra")
-rownames(PCA) <- ind_kh$famgen
-res.pca <- PCA(PCA, graph = TRUE)
+
+res.pca <- PCA(PCA_species, graph = TRUE,scale.unit = TRUE)
+arrows(0,0,data.poorter$PCA1,data.poorter$PCA2,col='red',length=0.1,angle=15)
+text(data.poorter$PCA1+c(0.1,0.1,0.1,0.05,0.05,0.1,0.15),
+     data.poorter$PCA2+c(0.1,0.1,0.1,0.05,0.2,0.1,0.05),
+     data.poorter$Var,col='red')
+
 fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 50))
 var <- get_pca_var(res.pca)
 var$coord
@@ -82,17 +120,54 @@ fviz_pca_var(res.pca, col.var = "cos2",
              repel = TRUE # Évite le chevauchement de texte
 )
 
-fviz_pca_ind (res.pca, pointsize = "cos2",
+fviz_pca_ind (res.pca,
               pointshape = 21, fill = "#E7B800",
               repel = TRUE # Évite le chevauchement de texte
 )
 
-fviz_pca_biplot(res.pca, repel = TRUE,
-                col.var = "#2E9FDF", # Couleur des variables
+p <- fviz_pca_biplot(res.pca, repel = TRUE,
+                col.var = "darkblue", # Couleur des variables
                 col.ind = "#696969",  # Couleur des individues
-                col.circle = "grey70"
-)
+                col.circle = "grey70",addEllipses=TRUE)
+
+ind <- data.frame(res.pca$ind$coord[, c(1,2), drop = FALSE])
+colnames(ind) <- c("x", "y")
+var <- facto_summarize(res.pca, element = "var", result = c("coord", 
+                                                      "contrib", "cos2"), axes = c(1,2))
+colnames(var)[2:3] <- c("x", "y")
+r <- min((max(ind[, "x"]) - min(ind[, "x"])/(max(var[, "x"]) - 
+                                               min(var[, "x"]))), (max(ind[, "y"]) - min(ind[, "y"])/(max(var[, 
+                                                                                                              "y"]) - min(var[, "y"]))))
+scale <- r*0.7
+var.thisstudy <-  as.data.frame(res.pca$var$coord*scale) %>% add_rownames()
+ind.thisstudy <- as.data.frame(res.pca$ind$coord) %>% add_rownames()
+
+ggplot() + 
+  geom_segment(data = data.poorter,aes(x = 0, y = 0,xend = PCA1,yend = PCA2),
+    size = 1, arrow = arrow(length = unit(0.05, "inches")),col='darkred',alpha = 0.5) +
+  geom_label_repel(data = data.poorter,aes(x = PCA1,y = PCA2,label = Var),col='darkred',
+                  segment.size = 0.5,
+                  segment.colour = "darkred",
+                  segment.alpha = 0.5,alpha = 0.5) +
+  geom_point(data =ind.thisstudy,
+             aes(x = Dim.1, y = Dim.2),size =2) +
+  geom_text_repel(data = ind.thisstudy,aes(x = Dim.1,y = Dim.2,label = rowname),col='black') +
+  geom_segment(data = var.thisstudy,aes(x = 0, y = 0,xend = Dim.1,yend = Dim.2),
+               size = 1, arrow = arrow(length = unit(0.05, "inches")),col='darkblue',alpha = 0.8) +
+  geom_label_repel(data = var.thisstudy,aes(x = Dim.1,y = Dim.2,label = rowname),col='darkblue',
+                   segment.size = 0.5,
+                   segment.colour = "darkblue",
+                   segment.alpha = 0.5,alpha = 0.7) +
+  labs(x = paste0("Dim1 (",sprintf("%.1f",res.pca$eig$`percentage of variance`[1]),"%)"),
+       y = paste0("Dim1 (",sprintf("%.1f",res.pca$eig$`percentage of variance`[2]),"%)")) +
+  theme_bw() + theme(panel.grid.minor = element_blank(),
+                     axis.title = element_text(size=12),
+                     axis.text = element_text(size=12)) +
+  geom_abline(slope = 0,intercept = 0,linetype=3,color = "darkgrey") +
+  geom_vline(xintercept = 0,linetype=3,color = "darkgrey")
+
+
 
 ggsave(plot=last_plot(),
-       dpi = 300,width = 30,height = 25,units = 'cm',
+       dpi = 300,width = 20,height = 20,units = 'cm',
        filename = file.path(getwd(),'Figures/PCA.png'))

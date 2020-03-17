@@ -81,20 +81,37 @@ for (indiv in inds){
                           temp))
 }
 
+data_kh <- data_kh %>% group_by(ind) %>% mutate(drel = (d-min(d,na.rm=TRUE))/(max(d,na.rm=TRUE)-min(d,na.rm=TRUE)))
+
 test_plot <- expr(
   ggplot(data_kh) +
-  geom_line(aes(x = d*1000*1000, y = Kp_uni2,color = Dh*1000*1000,group = ind)) +
-  # scale_x_log10() +
-  # scale_y_log10() + 
-  labs(x = 'Xylem vessel diameter (µm)',
-       y = 'Cumulative contribution to Kp (%)') +
-  scale_color_gradient2(name = "Dh (µm)", 
-                     low = rgb(241, 54, 23, maxColorValue=255), 
-                     high = rgb(0, 61, 104, maxColorValue=255),
-                     mid =  "grey90",
-                     midpoint = 150) +
-  theme(axis.title.x = element_text(hjust = 0.5),
-        axis.title.y = element_text(hjust = 0.5, vjust = 1)))
+    geom_line(aes(x = drel, y = Kp_uni2,color = Dh*1000*1000,group = ind)) +
+    # scale_x_log10() +
+    # scale_y_log10() + 
+    labs(x = 'Xylem vessel diameter (µm)',
+         y = 'Cumulative contribution to Kp (%)') +
+    scale_color_gradient2(name = "Dh (µm)", 
+                          low = rgb(241, 54, 23, maxColorValue=255), 
+                          high = rgb(0, 61, 104, maxColorValue=255),
+                          mid =  "grey90",
+                          midpoint = 150) +
+    theme(axis.title.x = element_text(hjust = 0.5),
+          axis.title.y = element_text(hjust = 0.5, vjust = 1)))
+
+test_plot2 <- expr(
+  ggplot(data_kh) +
+    geom_line(aes(x = d*1000*1000, y = Kp_uni2,color = Dh*1000*1000,group = ind)) +
+    # scale_x_log10() +
+    # scale_y_log10() + 
+    labs(x = 'Xylem vessel diameter (µm)',
+         y = 'Cumulative contribution to Kp (%)') +
+    scale_color_gradient2(name = "Dh (µm)", 
+                          low = rgb(241, 54, 23, maxColorValue=255), 
+                          high = rgb(0, 61, 104, maxColorValue=255),
+                          mid =  "grey90",
+                          midpoint = 150) +
+    theme(axis.title.x = element_text(hjust = 0.5),
+          axis.title.y = element_text(hjust = 0.5, vjust = 1)))
 
 # for (i in seq(nrow(data_ind))){
 #   new_layer <- expr(stat_function(fun=function(x) x**4/(data_ind$N[!!i]*(data_ind$Dh[!!i]*1000*1000)**4)*100))

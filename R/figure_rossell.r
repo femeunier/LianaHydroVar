@@ -24,7 +24,7 @@ VD <- as.data.frame(read.table(file3,sep=',',header = TRUE)) %>% rename(ind = Li
 # Do lianas really have wide vessels? Vessel diameter–stem length scaling in non-self-supporting plants
 # Julieta A.RosellaMark E.Olsonb
 file4 <-  file.path(getwd(),'data/rossell.csv')
-rossell <- as.data.frame(read.table(file4,sep=',',header = TRUE)) %>% select(c('Genus','Species','Dh','Vmm','Self')) %>%
+rossell <- as.data.frame(read.table(file4,sep=',',header = TRUE)) %>% select(c('Family','Genus','Species','Dh','Vmm','Self')) %>%
   rename(VD = 'Vmm') %>% mutate(source = 'Rossell')
 
 # Units conversion
