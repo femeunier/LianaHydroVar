@@ -69,7 +69,7 @@ ind_kh <- data_kh %>% group_by(ind,famgen) %>% add_count() %>% summarize(
                                                                                Dh = log10(Dh))
 
 
-PCA <- ind_kh %>% select(dbh,wd,d_mean,d_max,Dh,VD,Kp,VA) %>% rename(DBH = dbh,WD = wd,D = d_mean,Dmax = d_max) %>% ungroup()
+PCA <- ind_kh %>% select(dbh,wd,d_mean,d_max,Dh,VD,Kp,VA) %>% rename(DBH = dbh,Gb = wd,D = d_mean,Dmax = d_max) %>% ungroup()
 PCA_species <- as.data.frame(
   samples %>% merge(unique(ind_kh),by = 'ind') %>% group_by(species) %>% mutate(Vessel_N = N) %>% add_count() %>% summarize(
     N = mean(n),
@@ -83,7 +83,7 @@ PCA_species <- as.data.frame(
     mean_VD = mean(VD, na.rm = TRUE),
     mean_VA = mean(VA*100, na.rm = TRUE),
     mean_N = mean(Vessel_N,na.rm = TRUE))  %>% select(species,mean_dbh,mean_wd,mean_d,max_d,mean_Dh,mean_VD,mean_Kp,mean_VA) %>% 
-  rename(DBH = mean_dbh,WD = mean_wd,D = mean_d,Dmax = max_d,VA = mean_VA,
+  rename(DBH = mean_dbh,Gb = mean_wd,D = mean_d,Dmax = max_d,VA = mean_VA,
          Kp = mean_Kp, VD = mean_VD,Dh = mean_Dh) %>% ungroup() %>% 
   mutate(d_mean = log10(D),
           d_max = log10(Dmax),
@@ -142,6 +142,8 @@ scale <- r*0.7
 var.thisstudy <-  as.data.frame(res.pca$var$coord*scale) %>% add_rownames()
 ind.thisstudy <- as.data.frame(res.pca$ind$coord) %>% add_rownames()
 
+levels(data.poorter$Var)[7] <- "Gb"
+
 ggplot() + 
   geom_segment(data = data.poorter,aes(x = 0, y = 0,xend = PCA1,yend = PCA2),
     size = 1, arrow = arrow(length = unit(0.05, "inches")),col='darkred',alpha = 0.5) +
@@ -158,8 +160,8 @@ ggplot() +
                    segment.size = 0.5,
                    segment.colour = "darkblue",
                    segment.alpha = 0.5,alpha = 0.7) +
-  labs(x = paste0("Dim1 (",sprintf("%.1f",res.pca$eig$`percentage of variance`[1]),"%)"),
-       y = paste0("Dim1 (",sprintf("%.1f",res.pca$eig$`percentage of variance`[2]),"%)")) +
+  labs(x = paste0("PC1 (",sprintf("%.1f",res.pca$eig$`percentage of variance`[1]),"%)"),
+       y = paste0("PC2 (",sprintf("%.1f",res.pca$eig$`percentage of variance`[2]),"%)")) +
   theme_bw() + theme(panel.grid.minor = element_blank(),
                      axis.title = element_text(size=12),
                      axis.text = element_text(size=12)) +
