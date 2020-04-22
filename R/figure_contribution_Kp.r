@@ -118,8 +118,9 @@ test_plot2 <- expr(
 #   test_plot <- expr(!!test_plot + !!new_layer)
 # }
 
-eval(test_plot)
+eval(test_plot2)
 
 
-ggsave(filename = file.path(getwd(),'Figures/Figure_contribution.png'))
+ggsave(filename = file.path(getwd(),'Figures/Figure_contribution.png'),
+       dpi = 300,width = 20,height = 15,units = "cm")
 # SLope = 1/N/Dh**4 = 1/VD/WA/Dh**4

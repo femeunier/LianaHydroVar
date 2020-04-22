@@ -40,7 +40,8 @@ data_kh <- data_kh %>% group_by(famgen) %>% mutate(Dh2 = sum(d**5)/sum(d**4)*100
                                                    Dh = (1/max(Vessel.number)*sum(d**4))**(1/4)*1000*1000) # µm
 
 data_species <- data_kh %>% group_by(famgen) %>% filter(row_number()==1) %>%
-  ungroup() %>% select(c('genus','VD','Dh')) %>% mutate(Self = 'nonself',Species = '',source = 'Robin') %>% rename(Genus = genus)
+  ungroup() %>% select(c('family','genus','VD','Dh')) %>% mutate(Self = 'nonself',Species = '',source = 'Robin') %>% rename(Genus = genus,
+                                                                                                                            Family = family)
 
 rossell_incremented <- rbind(rossell,data_species)
 

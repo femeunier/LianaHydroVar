@@ -199,4 +199,5 @@ ggplot() +
   geom_vline(xintercept = 0,linetype=3,color = "darkgrey") + guides(color = FALSE) +
   scale_color_brewer(palette = "Spectral")
 
-
+ggplot(ind_kh) +
+  geom_point(aes(x = Kp,y = N))
